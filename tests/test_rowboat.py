@@ -1,138 +1,99 @@
 import pytest
-from rowboat.models import Rowboat
+from rowboat.models import Rowboat, Rower
 from rowboat.exceptions import (
     AnchorDroppedException,
     NoRowersException,
     OarAssignmentException,
-    DuplicateRowerException,
     SeatOccupiedException,
+    RowboatException,
 )
 
 
-def test_initial_state():
-    boat = Rowboat()
+@pytest.fixture
+def boat() -> Rowboat:
+    """Возвращает новый экземпляр лодки для каждого теста."""
+    return Rowboat()
+
+@pytest.fixture
+def rower_vasya() -> Rower:
+    """Возвращает экземпляр гребца."""
+    return Rower(name="Вася")
+
+
+def test_initial_state_is_correct(boat: Rowboat):
+    """Тест: начальное состояние лодки должно быть корректным."""
     status = boat.get_status()
-    assert status == {
-        "anchor_dropped": False,
-        "is_moving": False,
-        "middle_seat_has_rower": False,
-        "oars_assigned": 0,
-        "oars_in_use": [],
-    }
+    assert not status["is_moving"]
+    assert not status["anchor_dropped"]
+    assert all(rower is None for rower in status["seats"].values())
+    assert not status["oars_in_use"]
 
+def test_add_rower_successfully(boat: Rowboat, rower_vasya: Rower):
+    """Тест: гребца можно успешно посадить на свободную скамью."""
+    boat.add_rower(rower_vasya, "middle")
+    status = boat.get_status()
+    assert status["seats"]["middle"] == "Вася"
 
-def test_drop_and_raise_anchor():
-    boat = Rowboat()
-    boat.drop_anchor()
-    assert boat.anchor.is_dropped
-    boat.raise_anchor()
-    assert not boat.anchor.is_dropped
-
-
-def test_add_rower_to_middle_seat():
-    boat = Rowboat()
-    boat.add_rower("middle")
-    assert boat.get_status()["middle_seat_has_rower"] is True
-
-
-def test_add_rower_to_occupied_seat_raises():
-    boat = Rowboat()
-    boat.add_rower("middle")
+def test_add_rower_to_occupied_seat_raises_exception(boat: Rowboat, rower_vasya: Rower):
+    """Тест: нельзя посадить гребца на уже занятую скамью."""
+    boat.add_rower(rower_vasya, "front")
+    another_rower = Rower(name="Петя")
+    
     with pytest.raises(SeatOccupiedException):
-        boat.add_rower("middle")
+        boat.add_rower(another_rower, "front")
 
+def test_add_same_rower_twice_raises_exception(boat: Rowboat, rower_vasya: Rower):
+    """Тест: нельзя посадить одного и того же гребца на две разные скамьи."""
+    boat.add_rower(rower_vasya, "front")
+    
+    with pytest.raises(RowboatException):
+        boat.add_rower(rower_vasya, "middle")
 
-def test_add_duplicate_rower():
-    boat = Rowboat()
-    boat.add_rower("middle")
-    with pytest.raises(DuplicateRowerException):
-        boat.add_rower("middle")  # пытаемся того же самого посадить снова
+def test_row_with_anchor_down_raises_exception(boat: Rowboat, rower_vasya: Rower):
+    """Тест: нельзя грести, если якорь опущен."""
+    boat.add_rower(rower_vasya, "middle")
+    boat.assign_oars_to_rower()
+    boat.drop_anchor()
+    
+    with pytest.raises(AnchorDroppedException):
+        boat.row()
+    assert not boat.is_moving
 
-
-def test_assign_oars_to_middle_seat():
-    boat = Rowboat()
-    boat.add_rower("middle")
-    boat.assign_oars_to_middle_seat()
-    assert len(boat.assigned_oars) == 2
-    assert all(oar.in_use for oar in boat.assigned_oars)
-
-
-def test_assign_oars_twice_raises():
-    boat = Rowboat()
-    boat.add_rower("middle")
-    boat.assign_oars_to_middle_seat()
-    with pytest.raises(OarAssignmentException):
-        boat.assign_oars_to_middle_seat()
-
-
-def test_row_without_rower_raises():
-    boat = Rowboat()
-    boat.assign_oars_to_middle_seat()
+def test_row_without_rower_raises_exception(boat: Rowboat):
+    """Тест: нельзя грести, если на средней скамье нет гребца."""
     with pytest.raises(NoRowersException):
         boat.row()
 
-
-def test_row_with_anchor_down_raises():
-    boat = Rowboat()
-    boat.add_rower("middle")
-    boat.assign_oars_to_middle_seat()
-    boat.drop_anchor()
-    with pytest.raises(AnchorDroppedException):
-        boat.row()
-
-
-def test_row_without_oars_raises():
-    boat = Rowboat()
-    boat.add_rower("middle")
+def test_row_without_assigned_oars_raises_exception(boat: Rowboat, rower_vasya: Rower):
+    """Тест: нельзя грести, если гребцу не выданы вёсла."""
+    boat.add_rower(rower_vasya, "middle")
+    
     with pytest.raises(OarAssignmentException):
         boat.row()
 
-
-def test_successful_rowing_sets_status():
-    boat = Rowboat()
-    boat.add_rower("middle")
-    boat.assign_oars_to_middle_seat()
-    boat.row()
-    status = boat.get_status()
-    assert status["is_moving"] is True
-    assert status["oars_assigned"] == 2
-    assert len(status["oars_in_use"]) == 2
-
-
-def test_oars_assigned_only_to_middle_seat():
-    boat = Rowboat()
-    boat.add_rower("front")
-    with pytest.raises(OarAssignmentException):
-        boat.assign_oars_to_middle_seat()  # нельзя — нет гребца в середине
-
-
-def test_oars_removed_simulation():
-    boat = Rowboat()
-    boat.oars.pop()  # оставим только один весло
-    boat.add_rower("middle")
-    with pytest.raises(OarAssignmentException):
-        boat.assign_oars_to_middle_seat()
-
-
-def test_row_after_raise_anchor():
-    boat = Rowboat()
-    boat.add_rower("middle")
-    boat.assign_oars_to_middle_seat()
-    boat.drop_anchor()
-    with pytest.raises(AnchorDroppedException):
-        boat.row()
+def test_successful_rowing_scenario(boat: Rowboat, rower_vasya: Rower):
+    """Тест: полный успешный сценарий гребли."""
     boat.raise_anchor()
-    boat.row()
-    assert boat.get_status()["is_moving"] is True
+    boat.add_rower(rower_vasya, "middle")
+    boat.assign_oars_to_rower()
 
-
-def test_status_fields_consistency():
-    boat = Rowboat()
-    assert not boat.get_status()["is_moving"]
-    boat.add_rower("middle")
-    boat.assign_oars_to_middle_seat()
     boat.row()
+
     status = boat.get_status()
-    assert status["middle_seat_has_rower"] is True
-    assert status["oars_assigned"] == 2
-    assert status["anchor_dropped"] is False
+    assert status["is_moving"]
+    assert status["oars_in_use"]
+    assert not status["anchor_dropped"]
+
+def test_drop_anchor_stops_moving(boat: Rowboat, rower_vasya: Rower):
+    """Тест: опускание якоря должно останавливать движение."""
+    boat.add_rower(rower_vasya, "middle")
+    boat.assign_oars_to_rower()
+    boat.row()
+    assert boat.is_moving
+
+    boat.drop_anchor()
+
+    status = boat.get_status()
+    assert not status["is_moving"]
+    assert status["anchor_dropped"]
+    assert not status["oars_in_use"]

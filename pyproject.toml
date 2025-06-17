@@ -1,0 +1,12 @@
+[project]
+name = "rowboat"
+version = "0.1.0"
+description = "Rowboat Simulation API"
+authors = [{ name = "Мухаммет Суханкулиев", email = "muhammet.jkl2.suhanguylev@gmail.com" }]
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+]
