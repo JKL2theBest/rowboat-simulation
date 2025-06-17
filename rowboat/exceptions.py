@@ -12,3 +12,13 @@ class NoRowersException(RowboatException):
 
 class OarAssignmentException(RowboatException):
     """Ошибка назначения вёсел."""
+
+
+class DuplicateRowerException(Exception):
+    """Исключение для повторного добавления гребца на скамью."""
+    pass
+
+
+class SeatOccupiedException(RowboatException):
+    """Исключение при попытке посадить гребца на занятую скамью."""
+    pass

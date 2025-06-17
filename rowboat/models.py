@@ -1,6 +1,12 @@
 from dataclasses import dataclass, field
 from typing import Optional, List
-from rowboat.exceptions import AnchorDroppedException, NoRowersException, OarAssignmentException
+from rowboat.exceptions import (
+    AnchorDroppedException,
+    NoRowersException,
+    OarAssignmentException,
+    DuplicateRowerException,
+    SeatOccupiedException,
+)
 
 
 @dataclass
@@ -20,6 +26,8 @@ class Seat:
     has_rower: bool = False
 
     def place_rower(self) -> None:
+        if self.has_rower:
+            raise SeatOccupiedException(f"Скамья {self.position} уже занята.")
         self.has_rower = True
 
 
@@ -43,6 +51,8 @@ class Rowboat:
 
     def add_rower(self, position: str) -> None:
         seat = self._get_seat(position)
+        if seat.has_rower:
+            raise SeatOccupiedException(f"Скамья {position} уже занята.")
         seat.place_rower()
 
     def _get_seat(self, position: str) -> Seat:
@@ -52,10 +62,16 @@ class Rowboat:
         raise ValueError("Некорректная позиция скамьи")
 
     def assign_oars_to_middle_seat(self) -> None:
+        middle_seat = self._get_seat('middle')
+        if not middle_seat.has_rower:
+            raise OarAssignmentException("Нет гребца на средней скамье для назначения весла.")
+
+        if self.assigned_oars:
+            raise OarAssignmentException("Весла уже назначены.")
+
         if len(self.oars) < 2:
             raise OarAssignmentException("Недостаточно вёсел для гребли")
 
-        # Назначаем оба весла и помечаем их как используемые
         self.assigned_oars = self.oars[:2]
         for oar in self.assigned_oars:
             oar.in_use = True
