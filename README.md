@@ -16,7 +16,7 @@
 
 1.  **Склонируйте репозиторий:**
     ```bash
-    git clone <ссылка_на_твой_репозиторий>
+    git clone https://github.com/JKL2theBest/rowboat-simulation/
     cd rowboat-simulation
     ```
 
