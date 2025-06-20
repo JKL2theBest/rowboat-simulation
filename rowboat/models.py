@@ -75,9 +75,16 @@ class Rowboat:
                 return seat
         raise RuntimeError(f"Внутренняя ошибка: скамья {position} не найдена.")
 
+    def _check_state(self, *allowed_states: BoatState):
+        """Внутренний метод для проверки, что лодка в разрешенном состоянии."""
+        if self.state not in allowed_states:
+            raise RowboatException(
+                f"Действие не может быть выполнено в состоянии {self.state.name}. "
+                f"Разрешенные состояния: {[s.name for s in allowed_states]}."
+            )
+
     def add_rower(self, rower: Rower, position: SeatPosition) -> None:
-        """
-        Сажает гребца на указанную скамью.
+        """Сажает гребца на скамью, только если лодка не в движении.
 
         Args:
             rower: Объект гребца для посадки.
@@ -87,10 +94,7 @@ class Rowboat:
             RowboatException: Если гребец уже в лодке или лодка не в состоянии IDLE.
             SeatOccupiedException: Если скамья уже занята.
         """
-        if self.state != BoatState.IDLE:
-            raise RowboatException(
-                "Нельзя сажать гребцов, когда лодка в движении или на якоре."
-            )
+        self._check_state(BoatState.IDLE, BoatState.ANCHORED)
 
         if any(s.rower and s.rower.name == rower.name for s in self._seats):
             raise RowboatException(f"Гребец {rower.name} уже находится в лодке.")
@@ -99,10 +103,7 @@ class Rowboat:
         target_seat.place_rower(rower)
 
     def assign_oars_to_rower(self) -> None:
-        if self.state != BoatState.IDLE:
-            raise OarAssignmentException(
-                "Нельзя назначить вёсла, когда лодка в движении или на якоре."
-            )
+        self._check_state(BoatState.IDLE)
 
         middle_seat = self._get_seat(SeatPosition.MIDDLE)
         if not middle_seat.is_occupied:
@@ -139,10 +140,15 @@ class Rowboat:
     def stop_rowing(self) -> None:
         if self.state == BoatState.ROWING:
             self.state = BoatState.IDLE
+            self._assigned_rower = None
 
     def drop_anchor(self) -> None:
         if self.state == BoatState.ANCHORED:
             return
+
+        if self.state == BoatState.ROWING:
+            self.stop_rowing()
+
         self.state = BoatState.ANCHORED
         self._anchor.is_dropped = True
 

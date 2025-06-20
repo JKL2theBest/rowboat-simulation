@@ -3,17 +3,16 @@
 Проект представляет собой API для симуляции управления вёсельной лодкой, написанный на Python, с полным набором автотестов на `pytest`.
 
 ```
-├── rowboat/ # Основной пакет с исходным кодом API
+├── rowboat/
 │ ├── init.py
-│ ├── models.py # Реализация моделей (Лодка, Гребец, и т.д.)
-│ └── exceptions.py # Пользовательские исключения
-├── tests/ # Пакет с автотестами
+│ ├── models.py
+│ └── exceptions.py
+├── tests/
 │ ├── init.py
-│ └── test_rowboat.py # Тесты для API лодки на pytest
-├── .gitignore # Исключение ненужных файлов из Git
-├── pyproject.toml # Файл конфигурации проекта и зависимостей
-├── README.md # Этот файл
-└── testcases.md # Документация с тест-кейсами
+│ └── test_rowboat.py
+├── pyproject.toml
+├── README.md
+└── testcases.md
 ```
 
 ## Установка и запуск
@@ -25,9 +24,9 @@
 
 ---
 
-**Шаг 1: Склонировать репозиторий**
+**Шаг 1**
 ```bash
-git clone https://github.com/JKL2theBest/rowboat-simulation/  # Замените на вашу ссылку
+git clone https://github.com/JKL2theBest/rowboat-simulation/
 cd rowboat-simulation
 ```
 
@@ -36,7 +35,8 @@ cd rowboat-simulation
 # Для Linux / macOS
 python3 -m venv venv
 source venv/bin/activate
-
+```
+```bash
 # Для Windows
 python -m venv venv
 venv\Scripts\activate
