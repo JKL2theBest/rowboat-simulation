@@ -1,5 +1,5 @@
 class RowboatException(Exception):
-    """Базовое исключение для лодки."""
+    """Базовое исключение."""
 
 
 class AnchorDroppedException(RowboatException):
@@ -7,18 +7,12 @@ class AnchorDroppedException(RowboatException):
 
 
 class NoRowersException(RowboatException):
-    """Попытка грести без гребца."""
+    """Попытка грести без гребца или назначенных вёсел."""
 
 
 class OarAssignmentException(RowboatException):
     """Ошибка назначения вёсел."""
 
 
-class DuplicateRowerException(Exception):
-    """Исключение для повторного добавления гребца на скамью."""
-    pass
-
-
 class SeatOccupiedException(RowboatException):
     """Исключение при попытке посадить гребца на занятую скамью."""
-    pass
