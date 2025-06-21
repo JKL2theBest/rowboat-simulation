@@ -7,50 +7,41 @@ from rowboat.exceptions import (
     RowboatException,
     SeatOccupiedException,
 )
-from rowboat.models import BoatState, Rowboat, Rower, SeatPosition
+from rowboat.models import Rowboat, Rower, SeatPosition
 
 
 @pytest.fixture
 def boat() -> Rowboat:
+    """Чистый экземпляр лодки для каждого теста."""
     return Rowboat()
 
 
 @pytest.fixture
 def rower_vasya() -> Rower:
+    """Экземпляр гребца 'Вася'."""
     return Rower(name="Вася")
 
 
-def test_initial_state_is_idle(boat: Rowboat):
-    """Тест: Изначально лодка должна быть в состоянии IDLE."""
+def test_initial_state_is_correct(boat: Rowboat):
+    """Тест: Изначально лодка должна быть на воде, не двигаться, с поднятым якорем."""
     status = boat.get_status()
-    assert boat.state == BoatState.IDLE
-    assert status["state"] == "IDLE"
-    assert not status["anchor_dropped"]
+
+    assert not boat.is_moving
+    assert not boat.is_anchor_dropped
+    assert status["is_moving"] is False
+    assert status["is_anchor_dropped"] is False
     assert all(rower is None for rower in status["seats"].values())
     assert status["rower_with_oars"] is None
 
 
-@pytest.mark.parametrize(
-    "position", [SeatPosition.FRONT, SeatPosition.MIDDLE, SeatPosition.BACK]
-)
+@pytest.mark.parametrize("position", list(SeatPosition))
 def test_add_rower_successfully_to_any_seat(
     boat: Rowboat, rower_vasya: Rower, position: SeatPosition
 ):
     """Тест: Гребца можно успешно посадить на любую свободную скамью."""
     boat.add_rower(rower_vasya, position)
+
     assert boat.get_status()["seats"][position.value] == "Вася"
-
-
-def test_successful_rowing_scenario(boat: Rowboat, rower_vasya: Rower):
-    """Тест: Полный успешный сценарий: посадка, назначение вёсел, гребля."""
-    boat.add_rower(rower_vasya, SeatPosition.MIDDLE)
-    boat.assign_oars_to_rower()
-    boat.row()
-
-    assert boat.state == BoatState.ROWING
-    status = boat.get_status()
-    assert status["state"] == "ROWING"
-    assert status["rower_with_oars"] == "Вася"
 
 
 def test_add_rower_to_occupied_seat_raises_exception(boat: Rowboat, rower_vasya: Rower):
@@ -63,30 +54,23 @@ def test_add_rower_to_occupied_seat_raises_exception(boat: Rowboat, rower_vasya:
 
 
 def test_add_same_rower_twice_raises_exception(boat: Rowboat, rower_vasya: Rower):
-    """Тест: Нельзя посадить одного и того же гребца дважды."""
+    """Тест: Нельзя посадить одного и того же гребца на две разные скамьи."""
     boat.add_rower(rower_vasya, SeatPosition.FRONT)
 
     with pytest.raises(RowboatException, match="уже находится в лодке"):
         boat.add_rower(rower_vasya, SeatPosition.MIDDLE)
 
 
-def test_row_when_anchored_raises_exception(boat: Rowboat, rower_vasya: Rower):
-    """Тест: Нельзя грести, если якорь опущен."""
+def test_add_rower_while_moving_raises_exception(boat: Rowboat, rower_vasya: Rower):
+    """Тест: Нельзя сажать гребца, когда лодка в движении."""
     boat.add_rower(rower_vasya, SeatPosition.MIDDLE)
     boat.assign_oars_to_rower()
-    boat.drop_anchor()
+    boat.row()
+    assert boat.is_moving
 
-    assert boat.state == BoatState.ANCHORED
-    with pytest.raises(AnchorDroppedException):
-        boat.row()
-
-
-def test_row_without_assigned_oars_raises_exception(boat: Rowboat, rower_vasya: Rower):
-    """Тест: Нельзя грести, если вёсла не назначены гребцу."""
-    boat.add_rower(rower_vasya, SeatPosition.MIDDLE)
-
-    with pytest.raises(NoRowersException):
-        boat.row()
+    another_rower = Rower(name="Петя")
+    with pytest.raises(RowboatException, match="лодка в движении"):
+        boat.add_rower(another_rower, SeatPosition.FRONT)
 
 
 def test_assign_oars_without_rower_on_middle_seat_raises_exception(
@@ -99,91 +83,99 @@ def test_assign_oars_without_rower_on_middle_seat_raises_exception(
         boat.assign_oars_to_rower()
 
 
-def test_drop_anchor_stops_rowing(boat: Rowboat, rower_vasya: Rower):
-    """Тест: Опускание якоря останавливает движение и меняет состояние на ANCHORED."""
-    boat.add_rower(rower_vasya, SeatPosition.MIDDLE)
-    boat.assign_oars_to_rower()
-    boat.row()
-    assert (
-        boat.state == BoatState.ROWING
-    )  # Логика stop_rowing вызывается внутри drop_anchor, но state меняется на ANCHORED
-
-    boat.drop_anchor()
-
-    assert boat.state == BoatState.ANCHORED
-    assert boat.get_status()["anchor_dropped"] is True
-
-
-def test_raise_anchor_changes_state_to_idle(boat: Rowboat):
-    """Тест: Поднятие якоря переводит лодку из состояния ANCHORED в IDLE."""
-    boat.drop_anchor()
-    assert boat.state == BoatState.ANCHORED
-
-    boat.raise_anchor()
-
-    assert boat.state == BoatState.IDLE
-    assert boat.get_status()["anchor_dropped"] is False
-
-
-def test_integration_add_rower_while_rowing_raises_exception(
+def test_assign_oars_with_insufficient_oars_raises_exception(
     boat: Rowboat, rower_vasya: Rower
 ):
-    """Тест: Нельзя посадить гребца, когда лодка в движении."""
+    """Тест: Нельзя назначить вёсла, если их в лодке меньше двух."""
     boat.add_rower(rower_vasya, SeatPosition.MIDDLE)
-    boat.assign_oars_to_rower()
-    boat.row()
-    assert boat.state == BoatState.ROWING
+    boat._oars.pop()  # Имитация потери весла
+    boat._oars.pop()
 
-    another_rower = Rower(name="Петя")
-    with pytest.raises(
-        RowboatException, match="Действие не может быть выполнено в состоянии ROWING"
-    ):
-        boat.add_rower(another_rower, SeatPosition.FRONT)
-
-    assert boat.state == BoatState.ROWING
-    assert boat.get_status()["seats"]["front"] is None
-
-
-def test_integration_assign_oars_when_anchored_raises_exception(
-    boat: Rowboat, rower_vasya: Rower
-):
-    """Тест: Нельзя назначить вёсла, когда лодка на якоре."""
-    boat.add_rower(rower_vasya, SeatPosition.MIDDLE)
-    boat.drop_anchor()
-    assert boat.state == BoatState.ANCHORED
-
-    # Act & Assert
-    with pytest.raises(
-        RowboatException, match="Действие не может быть выполнено в состоянии ANCHORED"
-    ):
+    with pytest.raises(OarAssignmentException, match="Недостаточно вёсел"):
         boat.assign_oars_to_rower()
 
 
-def test_system_typical_journey_scenario(boat: Rowboat, rower_vasya: Rower):
-    """Тест: Проверка полного жизненного цикла 'путешествия'."""
+def test_row_when_anchored_raises_exception(boat: Rowboat, rower_vasya: Rower):
+    """Тест: Нельзя грести, если якорь опущен."""
+    boat.add_rower(rower_vasya, SeatPosition.MIDDLE)
+    boat.assign_oars_to_rower()
+    boat.drop_anchor()
+
+    with pytest.raises(AnchorDroppedException):
+        boat.row()
+
+    assert not boat.is_moving
+
+
+def test_row_without_assigned_oars_raises_exception(boat: Rowboat, rower_vasya: Rower):
+    """Тест: Нельзя грести, если вёсла не были назначены гребцу."""
+    boat.add_rower(rower_vasya, SeatPosition.MIDDLE)
+
+    with pytest.raises(NoRowersException, match="Вёсла не назначены"):
+        boat.row()
+
+
+def test_drop_anchor_stops_rowing_and_releases_oars(boat: Rowboat, rower_vasya: Rower):
+    """Тест: Опускание якоря останавливает движение и освобождает вёсла."""
     boat.add_rower(rower_vasya, SeatPosition.MIDDLE)
     boat.assign_oars_to_rower()
     boat.row()
-    assert boat.state == BoatState.ROWING
+    assert boat.is_moving
+    assert boat.get_status()["rower_with_oars"] is not None
 
     boat.drop_anchor()
-    assert boat.state == BoatState.ANCHORED
+
+    status = boat.get_status()
+    assert not status["is_moving"]
+    assert status["is_anchor_dropped"]
+    assert status["rower_with_oars"] is None
+
+
+def test_raise_anchor_works_correctly(boat: Rowboat):
+    """Тест: Поднятие якоря меняет его статус."""
+    boat.drop_anchor()
+    assert boat.is_anchor_dropped
+
+    boat.raise_anchor()
+
+    assert not boat.is_anchor_dropped
+
+
+def test_idempotency_of_anchor_actions(boat: Rowboat):
+    """Тест: Повторные вызовы методов якоря не вызывают ошибок и не меняют состояние."""
+    boat.drop_anchor()
+    status_after_first_drop = boat.get_status()
+    boat.drop_anchor()
+    assert boat.get_status() == status_after_first_drop
+
+    boat.raise_anchor()
+    status_after_first_raise = boat.get_status()
+    boat.raise_anchor()
+    assert boat.get_status() == status_after_first_raise
+
+
+def test_system_full_journey_scenario(boat: Rowboat, rower_vasya: Rower):
+    """Тест: Эмуляция полного 'путешествия' с греблей, остановкой и возобновлением."""
+    boat.add_rower(rower_vasya, SeatPosition.MIDDLE)
+    boat.assign_oars_to_rower()
+    boat.row()
+    assert boat.is_moving and boat.get_status()["rower_with_oars"] == "Вася"
+
+    boat.drop_anchor()
+    assert boat.is_anchor_dropped and not boat.is_moving
     assert boat.get_status()["rower_with_oars"] is None
 
     boat.raise_anchor()
-    assert boat.state == BoatState.IDLE
+    assert not boat.is_anchor_dropped
 
-    boat.assign_oars_to_rower()  # Должно сработать, т.к. состояние IDLE
+    boat.assign_oars_to_rower()
     boat.row()
-    assert boat.state == BoatState.ROWING
-    assert boat.get_status()["rower_with_oars"] == "Вася"
+    assert boat.is_moving and boat.get_status()["rower_with_oars"] == "Вася"
 
 
-def test_system_load_with_max_rowers(boat: Rowboat):
-    """Тест: Проверка системы при максимальной загрузке скамеек."""
-    rower1 = Rower("Петя")
-    rower2 = Rower("Вася")
-    rower3 = Rower("Коля")
+def test_system_max_load_scenario(boat: Rowboat):
+    """Тест: Проверка системы при максимальной загрузке гребцами."""
+    rower1, rower2, rower3 = Rower("Петя"), Rower("Вася"), Rower("Коля")
 
     boat.add_rower(rower1, SeatPosition.FRONT)
     boat.add_rower(rower2, SeatPosition.MIDDLE)
@@ -194,19 +186,8 @@ def test_system_load_with_max_rowers(boat: Rowboat):
     assert status["seats"]["middle"] == "Вася"
     assert status["seats"]["back"] == "Коля"
 
+    # Грести может только тот, кто посередине
     boat.assign_oars_to_rower()
     boat.row()
-    assert boat.state == BoatState.ROWING
 
-
-def test_system_stability_with_repeated_actions(boat: Rowboat):
-    """Тест: Проверка идемпотентности действий (повторные вызовы не ломают систему)."""
-    boat.drop_anchor()
-    state_after_first_drop = boat.state
-    boat.drop_anchor()  # Второй вызов не должен ничего сломать
-    assert boat.state == state_after_first_drop
-
-    boat.raise_anchor()
-    state_after_first_raise = boat.state
-    boat.raise_anchor()  # Второй вызов
-    assert boat.state == state_after_first_raise
+    assert boat.is_moving

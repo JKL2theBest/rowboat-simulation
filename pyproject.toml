@@ -1,25 +1,16 @@
 [project]
 name = "rowboat-simulation"
-version = "1.0.0"
+version = "1.0.1l"
 description = "API simulation for a rowboat."
 readme = "README.md"
 authors = [
     { name = "Мухаммет Суханкулиев", email = "muhammet.jkl2.suhanguylev@gmail.com" },
 ]
 requires-python = ">=3.10"
-license = { text = "MIT" }
-keywords = ["testing", "qa", "api", "simulation", "pytest"]
-
-dependencies = []
-
-[project.urls]
-Repository = "https://github.com/JKL2theBest/rowboat-simulation/"
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",
-    "black>=24.0.0",   # Инструмент для форматирования кода (рекомендуется)
-    "ruff>=0.4.0",     # Линтер и форматер, замена для flake8, isort (современный стандарт)
 ]
 
 [build-system]
@@ -28,15 +19,3 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 packages = ["rowboat"]
-
-[tool.ruff]
-# Запускается командой: ruff check .
-line-length = 88 # Совместимо с black
-
-[tool.ruff.lint]
-select = ["E", "W", "F", "I", "C", "B"]
-
-[tool.black]
-# Запускается командой: black .
-line-length = 88
-target-version = ['py310']
